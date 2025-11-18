@@ -1,72 +1,108 @@
+import { useEffect, useMemo, useState } from 'react'
+import LuxShell from './components/LuxShell'
+import SurveyCards from './components/SurveyCards'
+import BuilderPanel from './components/BuilderPanel'
+import { apiGet, apiPost, apiPatch, apiDelete, baseUrl } from './lib/api'
+
 function App() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Subtle pattern overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+  const [surveys, setSurveys] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState(null)
 
-      <div className="relative min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Header with Flames icon */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center mb-6">
-              <img
-                src="/flame-icon.svg"
-                alt="Flames"
-                className="w-24 h-24 drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]"
-              />
-            </div>
+  const fetchSurveys = async () => {
+    setLoading(true)
+    try {
+      const data = await apiGet('/api/surveys')
+      setSurveys(data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-              Flames Blue
-            </h1>
+  useEffect(() => {
+    fetchSurveys()
+  }, [])
 
-            <p className="text-xl text-blue-200 mb-6">
-              Build applications through conversation
-            </p>
-          </div>
+  const startCreate = async () => {
+    setCreating(true)
+    const draft = {
+      title: 'Untitled Survey',
+      description: '',
+      status: 'draft',
+      questions: [],
+    }
+    try {
+      const res = await apiPost('/api/surveys', draft)
+      const created = { id: res.id, ...draft }
+      setSurveys((s) => [created, ...s])
+      setEditing(created)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setCreating(false)
+    }
+  }
 
-          {/* Instructions */}
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 shadow-xl mb-6">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Describe your idea</h3>
-                <p className="text-blue-200/80 text-sm">Use the chat panel on the left to tell the AI what you want to build</p>
-              </div>
-            </div>
+  const saveEditing = async (data) => {
+    try {
+      const saved = await apiPatch(`/api/surveys/${editing.id}`, data)
+      setSurveys((all) => all.map((s) => (s.id === editing.id ? saved : s)))
+      setEditing(saved)
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                2
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Watch it build</h3>
-                <p className="text-blue-200/80 text-sm">Your app will appear in this preview as the AI generates the code</p>
-              </div>
-            </div>
+  const removeSurvey = async (s) => {
+    if (!confirm('Delete this survey?')) return
+    try {
+      await apiDelete(`/api/surveys/${s.id}`)
+      setSurveys((all) => all.filter((i) => i.id !== s.id))
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                3
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Refine and iterate</h3>
-                <p className="text-blue-200/80 text-sm">Continue the conversation to add features and make changes</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-blue-300/60">
-              No coding required • Just describe what you want
-            </p>
-          </div>
-        </div>
+  const header = (
+    <div className="flex items-center justify-between py-6">
+      <div>
+        <div className="text-2xl font-semibold">Welcome back</div>
+        <div className="text-white/60 text-sm">Design luxurious, high‑converting surveys</div>
       </div>
+      <div className="text-white/40 text-xs">API: {baseUrl}</div>
     </div>
+  )
+
+  return (
+    <LuxShell header={header}>
+      {editing ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-semibold">Editing: {editing.title}</div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setEditing(null)} className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10">Back</button>
+              <button onClick={() => saveEditing(editing)} className="px-3 py-2 rounded-lg bg-gradient-to-tr from-[#b08d57] to-[#e6c266] text-black">Save</button>
+            </div>
+          </div>
+          <BuilderPanel value={editing} onChange={setEditing} />
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between mb-5">
+            <div className="text-lg font-semibold">Your Surveys</div>
+            <button disabled={creating} onClick={startCreate} className="px-4 py-2 rounded-xl bg-gradient-to-tr from-[#b08d57] to-[#e6c266] text-black disabled:opacity-60">{creating ? 'Creating…' : 'New Survey'}</button>
+          </div>
+          {loading ? (
+            <div className="text-white/60">Loading…</div>
+          ) : (
+            <SurveyCards surveys={surveys} onEdit={setEditing} onDelete={removeSurvey} onOpen={(s)=>setEditing(s)} />
+          )}
+        </>
+      )}
+    </LuxShell>
   )
 }
 
